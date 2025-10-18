@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Local configuration / secrets
+.env
+prod_app/.env
+
+# Generated artifacts
+prod_app/runtime_app*.py
+prod_app/runtime_app.py.bak
+streamlit-debug.log
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
