@@ -10,6 +10,7 @@ def test_app_streamlit_no_roi_artifacts():
     assert "streamlit_drawable_canvas" not in text
     assert "_build_full_image_roi_map" not in text
     assert ".get(\"roi_full_map\"" not in text
+    assert "FewShotStore" not in text
 
 
 def test_run_vision_eval_call_uses_three_arguments():

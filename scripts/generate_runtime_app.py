@@ -15,8 +15,7 @@ def _sanitize_prompt_bundle(bundle: dict) -> dict:
     if "roi_map" in user:
         user.pop("roi_map", None)
     clean["user"] = user
-    for fs in clean.get("few_shots", []):
-        fs.pop("roi", None)
+    clean.pop("few_shots", None)
     return clean
 
 

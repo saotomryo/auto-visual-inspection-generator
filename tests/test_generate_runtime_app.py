@@ -9,8 +9,7 @@ from scripts.generate_runtime_app import generate_runtime_app
 def test_generate_runtime_app_embeds_full_image_roi(tmp_path):
     prompt_bundle = {
         "system": "test system",
-        "user": {"spec_text": "spec", "instruction": "do it", "roi_map": {"dummy.png": []}},
-        "few_shots": [{"roi": [], "model_decision": {"verdict": "OK"}}],
+        "user": {"spec_text": "spec", "instruction": "do it"},
     }
 
     out_dir = tmp_path / "prod"

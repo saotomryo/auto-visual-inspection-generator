@@ -1,16 +1,18 @@
 import os
 import json
-import time
 from typing import List
 
 import streamlit as st
 from PIL import Image
+from dotenv import load_dotenv
 
 from src.prompt_factory import build_prompt_bundle
-from src.fewshot import FewShotStore
 from src.llm_providers import LLMProvider
 from src.vision_eval import run_vision_eval
 from scripts.generate_runtime_app import generate_runtime_app
+
+
+load_dotenv()
 
 
 st.set_page_config(page_title="外観検査アプリ自動生成(MVP)", layout="wide")
@@ -48,16 +50,14 @@ col_a, col_b = st.columns([1,1])
 
 with col_a:
     if st.button("A) 外観検査プロンプトを生成", disabled=not(spec_text and sample_images)):
-        few = FewShotStore("data/few_shots.jsonl")
         prompt_bundle = build_prompt_bundle(
             spec_text=spec_text,
-            few_shots=few.load_all()
         )
         st.session_state["prompt_bundle"] = prompt_bundle
         st.success("プロンプトを生成しました。右側で確認できます。")
 
 with col_b:
-    if st.button("B) サンプルで検査 → フィードバックをFew-shotへ追加", disabled="prompt_bundle" not in st.session_state):
+    if st.button("B) サンプルで検査", disabled="prompt_bundle" not in st.session_state):
         provider_client = LLMProvider(provider_name=provider, model=model, temperature=temperature, max_tokens=int(max_tokens))
         results = []
         with st.spinner("VLMで判定中..."):
@@ -70,25 +70,13 @@ with col_b:
 st.divider()
 
 if "prompt_bundle" in st.session_state:
-    st.subheader("生成されたプロンプト（System / User / Few-shot注入後）")
+    st.subheader("生成されたプロンプト（System / User）")
     st.code(json.dumps(st.session_state["prompt_bundle"], ensure_ascii=False, indent=2))
 
 if "eval_results" in st.session_state:
-    st.subheader("判定結果 & フィードバック登録")
-    few = FewShotStore("data/few_shots.jsonl")
+    st.subheader("判定結果")
     for item in st.session_state["eval_results"]:
         st.write(f"**{item['image']}** → 判定: `{item['decision'].get('verdict','unknown')}` / 詳細: {item['decision'].get('details','-')}")
-        fb = st.text_input(f"日本語フィードバック（期待する正解や指摘） - {item['image']}", key=f"fb-{item['image']}")
-        if st.button(f"保存（Few-shot追加） - {item['image']}"):
-            rec = {
-                "spec_text": spec_text,
-                "roi": [],
-                "model_decision": item["decision"],
-                "human_feedback": fb,
-                "timestamp": time.time(),
-            }
-            few.append(rec)
-            st.success("Few-shotを保存しました。")
 
 st.divider()
 st.subheader("C) 生成されたプロンプトから **最終アプリ** を組み立てる")

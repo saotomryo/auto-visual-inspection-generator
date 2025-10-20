@@ -1,8 +1,8 @@
 # Auto Visual Inspection **App Generator** (MVP)
 
-このプロジェクトは、**画像アップロード → 検査箇所UI → 日本語仕様の入力**を受け、
+このプロジェクトは、**画像アップロード → 日本語仕様の入力**を受け、
 1) 外観検査プロンプトの自動生成、
-2) いくつかのサンプルに対する日本語フィードバックをFew-shotとして蓄積、
+2) サンプル画像での判定結果を確認しながら仕様をブラッシュアップ、
 3) 生成プロンプトを用いた検査アプリ(ストリームリット)の自動生成・実行、
 までの**最小実装(MVP)**です。
 
@@ -16,8 +16,8 @@ auto-visual-inspection-generator/
 ├─ app_streamlit.py         # Streamlitアプリ (仕様入力・LLM接続)
 ├─ src/
 │  ├─ llm_providers.py      # OpenAI/GeminiのAPIラッパ
-│  ├─ prompt_factory.py     # プロンプト生成（System / User / Few-shot注入）
-│  ├─ fewshot.py            # Few-shotの保存・読み込み・反映
+│  ├─ prompt_factory.py     # プロンプト生成（System / User）
+│  ├─ fewshot.py            # （将来拡張用）Few-shotの保存・読み込みロジック
 │  └─ vision_eval.py        # 画像+プロンプトで評価(VLM呼び出し)の窓口
 ├─ data/
 │  └─ few_shots.jsonl       # 日本語フィードバック(少数例)の蓄積ファイル
@@ -58,15 +58,13 @@ os.environ['GEMINI_API_KEY'] = '...'
 3. Colab上でStreamlitをトンネリングして使うか、`app_streamlit.py`を直接Pythonとして実行し、プロンプト生成だけ検証することも可能です。
 （`colabcode`や`pyngrok`でポート公開する例は必要に応じて追記してください）
 
-## Few-shot の考え方（MVP）
-- `data/few_shots.jsonl` に、入力仕様/期待出力/日本語フィードバック を1行1JSONで保存。
+## 判定およびトークン設定
 - 判定用の出力トークン数はデフォルトで4096に設定されています。必要に応じて `max_output_tokens` を調整してください。
-- `app_streamlit.py` で検査結果に対する「正解/NG理由」をユーザが追記→保存。
-- 次回プロンプト生成時にFew-shotとしてプロンプトへ自動注入。
+- サンプル判定はプロンプト修正のための確認用途であり、Few-shot 学習は現在オフになっています。
 
 ## 最終アプリ自動生成
 - `scripts/generate_runtime_app.py` を実行すると、`prod_app/` に実行用Streamlitアプリを出力します。
-- 生成物は**固定化したプロンプト**と**Few-shot**を含み、運用者/顧客へ配布しやすい形にします。
+- 生成物は**固定化したプロンプト**を含み、運用者/顧客へ配布しやすい形にします。
 
 ## 注意
 - 画像処理/幾何ロジックそのものはVLM(例: GPT-4.1V / GPT-4o / Gemini 2.0 Vision)に委譲する設計です。
