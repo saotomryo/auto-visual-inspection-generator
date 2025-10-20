@@ -106,7 +106,7 @@ st.title("外観検査 - 最終アプリ")
 provider = st.selectbox("プロバイダ", ["OpenAI", "Gemini"])
 model = st.text_input("モデル名", os.getenv("OPENAI_MODEL" if provider == "OpenAI" else "GEMINI_MODEL", ""))
 temperature = st.slider("temperature", 0.0, 1.5, 0.2, 0.05)
-max_tokens = st.number_input("max_output_tokens", 256, 8192, 1024, step=128)
+max_tokens = st.number_input("max_output_tokens", 256, 16384, 4096, step=128)
 
 up = st.file_uploader("画像をアップロード", type=["png", "jpg", "jpeg"])
 if up:
@@ -115,7 +115,7 @@ if up:
     if st.button("判定する"):
         client = LLMProvider(provider_name=provider, model=model, temperature=temperature, max_tokens=int(max_tokens))
         decision = run_vision_eval(client, PROMPT_BUNDLE, img)
-        st.write(decision)
+        st.write(f"判定: {{decision.get('verdict', 'UNKNOWN')}} / 理由: {{decision.get('details', '-')}}")
 """.strip()
 
     app_code_parts = [
