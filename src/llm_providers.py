@@ -32,6 +32,14 @@ class LLMProvider:
         else:
             raise ValueError("Unsupported provider")
 
+    def chat_text(self, system_prompt: str, user_prompt: str) -> str:
+        provider = self.provider_name.lower()
+        if provider == "openai":
+            return self._openai_text(system_prompt, user_prompt)
+        if provider == "gemini":
+            return self._gemini_text(system_prompt, user_prompt)
+        raise ValueError("Unsupported provider")
+
     @staticmethod
     def _split_messages(messages: List[Dict[str, Any]]) -> tuple[str, str, Optional[str], Optional[tuple[str, str]]]:
         system_text = ""
@@ -281,3 +289,137 @@ class LLMProvider:
 
         parsed = self._parse_json_response(text, fallback_reason)
         return {"output_text": text, "json": parsed}
+
+    def _openai_text(self, system_prompt: str, user_prompt: str) -> str:
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEYが設定されていません。")
+
+        model = self.model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        payload: Dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        if self.temperature not in (None, 1):
+            payload["temperature"] = self.temperature
+        if self.max_tokens:
+            payload["max_completion_tokens"] = self.max_tokens
+
+        self._debug_print("=== OpenAI テキストプロンプト ===", payload)
+
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=120,
+        )
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            details = self._extract_error_details(response)
+            if "temperature" in details and "default (1)" in details and "temperature" in payload:
+                payload.pop("temperature", None)
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                    timeout=120,
+                )
+                try:
+                    response.raise_for_status()
+                except requests.HTTPError:
+                    details = self._extract_error_details(response)
+                    raise RuntimeError(details)
+            elif "maximum" in details and "tokens" in details:
+                raise RuntimeError("出力が途中で打ち切られました。max_output_tokens を増やして再実行してください。")
+            else:
+                raise RuntimeError(details)
+
+        data = response.json()
+        self._debug_print("=== OpenAI テキストレスポンス ===", data)
+
+        choices = data.get("choices") or []
+        if not choices:
+            raise RuntimeError("OpenAIレスポンスにchoicesが含まれていません。")
+
+        message_content = choices[0].get("message", {}).get("content", "")
+        if isinstance(message_content, list):
+            return "\n".join(part.get("text", "") for part in message_content if part.get("type") == "text").strip()
+        return str(message_content).strip()
+
+    def _gemini_text(self, system_prompt: str, user_prompt: str) -> str:
+        api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEYが設定されていません。")
+
+        model = self.model or os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        generation_config: Dict[str, Any] = {}
+        if self.temperature not in (None, 1):
+            generation_config["temperature"] = self.temperature
+        if self.max_tokens:
+            generation_config["maxOutputTokens"] = self.max_tokens
+
+        payload = {
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": user_prompt}],
+                }
+            ],
+            "generationConfig": generation_config,
+        }
+
+        self._debug_print("=== Gemini テキストプロンプト ===", payload)
+
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            f"?key={api_key}"
+        )
+        response = requests.post(
+            url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=120,
+        )
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            details = self._extract_error_details(response)
+            if "temperature" in details and "default (1)" in details and "temperature" in payload.get("generationConfig", {}):
+                payload["generationConfig"].pop("temperature", None)
+                response = requests.post(
+                    url,
+                    headers={"Content-Type": "application/json"},
+                    json=payload,
+                    timeout=120,
+                )
+                try:
+                    response.raise_for_status()
+                except requests.HTTPError:
+                    details = self._extract_error_details(response)
+                    raise RuntimeError(details)
+            elif "maximum" in details and "tokens" in details:
+                raise RuntimeError("出力が途中で打ち切られました。max_output_tokens を増やして再実行してください。")
+            else:
+                raise RuntimeError(details)
+
+        data = response.json()
+        self._debug_print("=== Gemini テキストレスポンス ===", data)
+
+        candidates = data.get("candidates") or []
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text = "".join(part.get("text", "") for part in parts if "text" in part).strip()
+            if text:
+                return text
+        raise RuntimeError("Geminiレスポンスからテキストを取得できませんでした。")
